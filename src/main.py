@@ -1,5 +1,3 @@
-"""Command-line shell for the coursework tool."""
-
 from __future__ import annotations
 
 
