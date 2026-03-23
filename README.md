@@ -27,7 +27,11 @@ repository-name/
 
 ## Current State
 
-This is only the skeleton scaffold. The implementation will be added incrementally.
+The first increment is now in place:
+
+- a working interactive shell
+- recognition of `build`, `load`, `print`, `find`, and `exit`
+- placeholder responses for commands whose full functionality is not implemented yet
 
 ## Planned Commands
 
@@ -42,4 +46,23 @@ This is only the skeleton scaffold. The implementation will be added incremental
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -r requirements.txt
+```
+
+## Running
+
+```bash
+python3 -m src.main
+```
+
+Example:
+
+```text
+> build
+build command recognized. Crawling is not implemented yet.
+> print nonsense
+print command recognized for word 'nonsense'.
+> find good friends
+find command recognized for query 'good friends'.
+> exit
+Goodbye.
 ```
