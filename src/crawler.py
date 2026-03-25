@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from time import sleep
+from typing import Any, Callable
 from urllib.parse import urljoin
 
 import requests
@@ -18,17 +19,20 @@ class CrawledQuote:
 
 
 class WebsiteCrawler:
-    # Crawl quote pages from quotes.toscrape.com
 
     def __init__(
         self,
         base_url: str = "https://quotes.toscrape.com",
         session: requests.Session | Any | None = None,
         timeout: float = 10.0,
+        politeness_delay: float = 6.0,
+        sleeper: Callable[[float], None] = sleep,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.session = session or requests.Session()
         self.timeout = timeout
+        self.politeness_delay = politeness_delay
+        self.sleeper = sleeper
 
     def crawl(self, max_pages: int | None = None) -> list[CrawledQuote]:
         # Crawl quote pages until pagination ends or max_pages is reached
@@ -41,6 +45,9 @@ class WebsiteCrawler:
             if max_pages is not None and pages_crawled >= max_pages:
                 break
 
+            if pages_crawled > 0:
+                self.sleeper(self.politeness_delay)
+
             visited_urls.add(next_url)
             html = self._fetch_page(next_url)
             page_quotes, next_url = self._parse_page(html, next_url)
@@ -50,13 +57,11 @@ class WebsiteCrawler:
         return quotes
 
     def _fetch_page(self, url: str) -> str:
-        # Fetch a single page and return its HTML
         response = self.session.get(url, timeout=self.timeout)
         response.raise_for_status()
         return response.text
 
     def _parse_page(self, html: str, page_url: str) -> tuple[list[CrawledQuote], str | None]:
-        # Extract quote records and the next page URL from page HTML
         soup = BeautifulSoup(html, "html.parser")
         quotes = [self._parse_quote(block, page_url) for block in soup.select("div.quote")]
 
@@ -67,7 +72,6 @@ class WebsiteCrawler:
 
     @staticmethod
     def _parse_quote(quote_block: Any, page_url: str) -> CrawledQuote:
-        # Convert a quote block into a structured record
         text_element = quote_block.select_one("span.text")
         author_element = quote_block.select_one("small.author")
         tags = [tag.get_text(strip=True) for tag in quote_block.select(".tags a.tag")]

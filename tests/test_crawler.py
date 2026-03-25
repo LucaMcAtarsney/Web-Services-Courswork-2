@@ -19,6 +19,14 @@ class FakeSession:
         return FakeResponse(self.pages[url])
 
 
+class FakeSleeper:
+    def __init__(self) -> None:
+        self.calls: list[float] = []
+
+    def __call__(self, seconds: float) -> None:
+        self.calls.append(seconds)
+
+
 def test_parse_page_extracts_quotes_and_next_page_url():
     crawler = WebsiteCrawler(base_url="https://quotes.toscrape.com")
     html = """
@@ -70,7 +78,8 @@ def test_crawl_follows_pagination_until_no_next_link():
             """,
         }
     )
-    crawler = WebsiteCrawler(session=session)
+    sleeper = FakeSleeper()
+    crawler = WebsiteCrawler(session=session, sleeper=sleeper)
 
     quotes = crawler.crawl()
 
@@ -92,6 +101,7 @@ def test_crawl_follows_pagination_until_no_next_link():
         "https://quotes.toscrape.com/",
         "https://quotes.toscrape.com/page/2/",
     ]
+    assert sleeper.calls == [6.0]
 
 
 def test_crawl_respects_max_pages_limit():
@@ -114,7 +124,8 @@ def test_crawl_respects_max_pages_limit():
             """,
         }
     )
-    crawler = WebsiteCrawler(session=session)
+    sleeper = FakeSleeper()
+    crawler = WebsiteCrawler(session=session, sleeper=sleeper)
 
     quotes = crawler.crawl(max_pages=1)
 
@@ -127,3 +138,4 @@ def test_crawl_respects_max_pages_limit():
         )
     ]
     assert session.requested_urls == ["https://quotes.toscrape.com/"]
+    assert sleeper.calls == []
