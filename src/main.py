@@ -1,7 +1,24 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+from src.crawler import WebsiteCrawler
+from src.indexer import InvertedIndex
+from src.search import SearchEngine
+
 
 class SearchShell:
+    def __init__(
+        self,
+        crawler: WebsiteCrawler | None = None,
+        indexer: InvertedIndex | None = None,
+        search_engine: SearchEngine | None = None,
+        index_path: str | Path = "data/index.json",
+    ) -> None:
+        self.crawler = crawler or WebsiteCrawler()
+        self.indexer = indexer or InvertedIndex()
+        self.search_engine = search_engine or SearchEngine()
+        self.index_path = Path(index_path)
 
     def execute(self, command_line: str) -> str:
         if not command_line.strip():
@@ -12,20 +29,54 @@ class SearchShell:
         args = parts[1:]
 
         if command == "build":
-            return "build command recognized. Crawling is not implemented yet."
+            return self._build_index()
         if command == "load":
-            return "load command recognized. Index loading is not implemented yet."
+            return self._load_index()
         if command == "print":
             if len(args) != 1:
                 return "Usage: print <word>"
-            return f"print command recognized for word '{args[0]}'."
+            return self._print_word(args[0])
         if command == "find":
             if not args:
                 return "Usage: find <query>"
-            return f"find command recognized for query '{' '.join(args)}'."
+            return self._find_query(" ".join(args))
         if command in {"exit", "quit"}:
             return "Goodbye."
         return f"Unknown command: {command}"
+
+    def _build_index(self) -> str:
+        quotes = self.crawler.crawl()
+        index = self.indexer.build(quotes)
+        self.indexer.save(self.index_path)
+        self.search_engine.set_index(index)
+        page_count = len({quote.page_url for quote in quotes})
+        return f"Built index from {len(quotes)} quotes across {page_count} pages and {len(index)} terms."
+
+    def _load_index(self) -> str:
+        index = self.indexer.load(self.index_path)
+        self.search_engine.set_index(index)
+        return f"Loaded index from {self.index_path}."
+
+    def _print_word(self, word: str) -> str:
+        postings = self.indexer.postings_for(word)
+        if not postings:
+            return f"No postings found for '{word}'."
+
+        lines = [f"Postings for '{word}':"]
+        for page_url in sorted(postings):
+            posting = postings[page_url]
+            frequency = posting.get("frequency", 0)
+            positions = posting.get("positions", [])
+            lines.append(f"{page_url} -> frequency={frequency}, positions={positions}")
+        return "\n".join(lines)
+
+    def _find_query(self, query: str) -> str:
+        results = self.search_engine.find(query)
+        if not results:
+            return f"No results found for query '{query}'."
+
+        lines = [f"Results for '{query}':", *results]
+        return "\n".join(lines)
 
     def repl(self) -> None:
 
