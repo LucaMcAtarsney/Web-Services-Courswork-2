@@ -45,15 +45,23 @@ class SearchShell:
         return f"Unknown command: {command}"
 
     def _build_index(self) -> str:
-        quotes = self.crawler.crawl()
-        index = self.indexer.build(quotes)
-        self.indexer.save(self.index_path)
+        try:
+            quotes = self.crawler.crawl()
+            index = self.indexer.build(quotes)
+            self.indexer.save(self.index_path)
+        except Exception as error:
+            return f"Build failed: {error}"
+
         self.search_engine.set_index(index)
         page_count = len({quote.page_url for quote in quotes})
         return f"Built index from {len(quotes)} quotes across {page_count} pages and {len(index)} terms."
 
     def _load_index(self) -> str:
-        index = self.indexer.load(self.index_path)
+        try:
+            index = self.indexer.load(self.index_path)
+        except Exception as error:
+            return f"Load failed: {error}"
+
         self.search_engine.set_index(index)
         return f"Loaded index from {self.index_path}."
 

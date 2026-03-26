@@ -5,12 +5,15 @@ from src.main import SearchShell
 
 
 class FakeCrawler:
-    def __init__(self, quotes: list[CrawledQuote]) -> None:
+    def __init__(self, quotes: list[CrawledQuote], error: Exception | None = None) -> None:
         self.quotes = quotes
+        self.error = error
         self.called = False
 
     def crawl(self) -> list[CrawledQuote]:
         self.called = True
+        if self.error is not None:
+            raise self.error
         return self.quotes
 
 
@@ -20,10 +23,16 @@ class FakeIndexer:
         built_index: dict[str, dict[str, dict[str, int | list[int]]]] | None = None,
         loaded_index: dict[str, dict[str, dict[str, int | list[int]]]] | None = None,
         postings: dict[str, dict[str, int | list[int]]] | None = None,
+        build_error: Exception | None = None,
+        load_error: Exception | None = None,
+        save_error: Exception | None = None,
     ) -> None:
         self.built_index = built_index or {}
         self.loaded_index = loaded_index or {}
         self.postings = postings or {}
+        self.build_error = build_error
+        self.load_error = load_error
+        self.save_error = save_error
         self.saved_path: Path | None = None
         self.loaded_path: Path | None = None
 
@@ -31,12 +40,18 @@ class FakeIndexer:
         self,
         quotes: list[CrawledQuote],
     ) -> dict[str, dict[str, dict[str, int | list[int]]]]:
+        if self.build_error is not None:
+            raise self.build_error
         return self.built_index
 
     def save(self, file_path: str | Path) -> None:
+        if self.save_error is not None:
+            raise self.save_error
         self.saved_path = Path(file_path)
 
     def load(self, file_path: str | Path) -> dict[str, dict[str, dict[str, int | list[int]]]]:
+        if self.load_error is not None:
+            raise self.load_error
         self.loaded_path = Path(file_path)
         return self.loaded_index
 
@@ -130,3 +145,23 @@ def test_shell_validates_arguments_and_handles_missing_results():
     assert shell.execute("find missing query") == "No results found for query 'missing query'."
     assert shell.execute("dance") == "Unknown command: dance"
     assert shell.execute("exit") == "Goodbye."
+
+
+def test_shell_reports_build_failures_gracefully():
+    shell = SearchShell(
+        crawler=FakeCrawler([], error=RuntimeError("network request failed")),
+        indexer=FakeIndexer(),
+        search_engine=FakeSearchEngine(),
+    )
+
+    assert shell.execute("build") == "Build failed: network request failed"
+
+
+def test_shell_reports_load_failures_gracefully():
+    shell = SearchShell(
+        crawler=FakeCrawler([]),
+        indexer=FakeIndexer(load_error=FileNotFoundError("index file not found")),
+        search_engine=FakeSearchEngine(),
+    )
+
+    assert shell.execute("load") == "Load failed: index file not found"
