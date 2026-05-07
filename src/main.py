@@ -1,6 +1,12 @@
+"""Interactive command-line shell for the COMP3011 search engine tool."""
+
 from __future__ import annotations
 
 from pathlib import Path
+import sys
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.crawler import WebsiteCrawler
 from src.indexer import InvertedIndex
@@ -8,6 +14,12 @@ from src.search import SearchEngine
 
 
 class SearchShell:
+    """Read-eval-print loop exposing build, load, print, and find commands.
+
+    All components (crawler, indexer, search engine) are injected at
+    construction time so they can be replaced with fakes in tests.
+    """
+
     def __init__(
         self,
         crawler: WebsiteCrawler | None = None,
@@ -21,6 +33,10 @@ class SearchShell:
         self.index_path = Path(index_path)
 
     def execute(self, command_line: str) -> str:
+        """Parse *command_line* and dispatch to the appropriate handler.
+
+        Returns a string suitable for printing to the terminal.
+        """
         if not command_line.strip():
             return "Please enter a command."
 
@@ -45,19 +61,38 @@ class SearchShell:
         return f"Unknown command: {command}"
 
     def _build_index(self) -> str:
-        quotes = self.crawler.crawl()
+        """Crawl the target site, build the inverted index, and persist it."""
+        try:
+            quotes = self.crawler.crawl()
+        except Exception as exc:
+            return f"Crawl failed: {exc}"
+
         index = self.indexer.build(quotes)
-        self.indexer.save(self.index_path)
-        self.search_engine.set_index(index)
+
+        try:
+            self.indexer.save(self.index_path)
+        except OSError as exc:
+            return f"Failed to save index: {exc}"
+
+        self.search_engine.set_index(index, self.indexer.page_token_counts)
         page_count = len({quote.page_url for quote in quotes})
         return f"Built index from {len(quotes)} quotes across {page_count} pages and {len(index)} terms."
 
     def _load_index(self) -> str:
-        index = self.indexer.load(self.index_path)
-        self.search_engine.set_index(index)
+        """Load a previously saved index from disk and activate it for search."""
+        if not self.index_path.exists():
+            return f"Index file not found at '{self.index_path}'. Run 'build' first."
+
+        try:
+            index = self.indexer.load(self.index_path)
+        except Exception as exc:
+            return f"Failed to load index: {exc}"
+
+        self.search_engine.set_index(index, self.indexer.page_token_counts)
         return f"Loaded index from {self.index_path}."
 
     def _print_word(self, word: str) -> str:
+        """Print all postings for *word* (case-insensitive)."""
         postings = self.indexer.postings_for(word)
         if not postings:
             return f"No postings found for '{word}'."
@@ -71,6 +106,7 @@ class SearchShell:
         return "\n".join(lines)
 
     def _find_query(self, query: str) -> str:
+        """Search for pages containing all terms in *query* and return ranked URLs."""
         results = self.search_engine.find(query)
         if not results:
             return f"No results found for query '{query}'."
@@ -79,8 +115,7 @@ class SearchShell:
         return "\n".join(lines)
 
     def repl(self) -> None:
-
-        # Run the interactive shell
+        """Start the interactive read-eval-print loop."""
         print("COMP3011 Search Engine Tool")
         print("Commands: build, load, print <word>, find <query>, exit")
 
@@ -101,6 +136,7 @@ class SearchShell:
 
 
 def main() -> None:
+    """Entry point: start the interactive shell."""
     SearchShell().repl()
 
 

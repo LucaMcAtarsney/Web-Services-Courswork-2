@@ -1,3 +1,5 @@
+"""Web crawler for https://quotes.toscrape.com/ with configurable politeness delay."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,6 +13,7 @@ from bs4 import BeautifulSoup
 
 @dataclass(frozen=True)
 class CrawledQuote:
+    """Immutable record for a single quote extracted from a crawled page."""
 
     text: str
     author: str
@@ -19,6 +22,13 @@ class CrawledQuote:
 
 
 class WebsiteCrawler:
+    """Crawls all quote pages on the target site and returns structured records.
+
+    A configurable politeness delay (default 6 s) is enforced between every
+    successive HTTP request.  The crawler follows pagination links until no
+    "next" link is found, a ``max_pages`` limit is reached, or a network error
+    occurs, at which point it stops and returns whatever it has collected.
+    """
 
     def __init__(
         self,
@@ -35,7 +45,13 @@ class WebsiteCrawler:
         self.sleeper = sleeper
 
     def crawl(self, max_pages: int | None = None) -> list[CrawledQuote]:
-        # Crawl quote pages until pagination ends or max_pages is reached
+        """Crawl all quote pages and return a flat list of extracted quotes.
+
+        Pagination is followed automatically.  The first page is fetched
+        immediately; each subsequent page waits ``politeness_delay`` seconds.
+        On an unrecoverable network or HTTP error the crawl stops early and
+        returns whatever quotes have been collected so far.
+        """
         quotes: list[CrawledQuote] = []
         next_url = f"{self.base_url}/"
         visited_urls: set[str] = set()
@@ -49,19 +65,25 @@ class WebsiteCrawler:
                 self.sleeper(self.politeness_delay)
 
             visited_urls.add(next_url)
-            html = self._fetch_page(next_url)
-            page_quotes, next_url = self._parse_page(html, next_url)
-            quotes.extend(page_quotes)
+            try:
+                html = self._fetch_page(next_url)
+                page_quotes, next_url = self._parse_page(html, next_url)
+                quotes.extend(page_quotes)
+            except requests.RequestException:
+                break
+
             pages_crawled += 1
 
         return quotes
 
     def _fetch_page(self, url: str) -> str:
+        """Fetch *url* and return its HTML body, raising on HTTP errors."""
         response = self.session.get(url, timeout=self.timeout)
         response.raise_for_status()
         return response.text
 
     def _parse_page(self, html: str, page_url: str) -> tuple[list[CrawledQuote], str | None]:
+        """Parse an HTML page into a list of quotes and the next-page URL."""
         soup = BeautifulSoup(html, "html.parser")
         quotes = [self._parse_quote(block, page_url) for block in soup.select("div.quote")]
 
@@ -72,6 +94,7 @@ class WebsiteCrawler:
 
     @staticmethod
     def _parse_quote(quote_block: Any, page_url: str) -> CrawledQuote:
+        """Extract a single :class:`CrawledQuote` from a ``div.quote`` block."""
         text_element = quote_block.select_one("span.text")
         author_element = quote_block.select_one("small.author")
         tags = [tag.get_text(strip=True) for tag in quote_block.select(".tags a.tag")]

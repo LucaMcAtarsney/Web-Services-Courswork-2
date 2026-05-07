@@ -1,5 +1,19 @@
+# Local Python environments
 .venv/
+.venv-video/
+
+# Python/test caches
 .pytest_cache/
+.pytest-tmp/
+.tmp/
 __pycache__/
 *.pyc
+
+# Generated app data
 data/index.json
+
+# Video/rendering workspace and generated media
+video/
+requirements-video.txt
+media/
+*.mp4
