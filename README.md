@@ -11,7 +11,7 @@ terms in a query using TF-IDF ranked retrieval.
 ## Project Structure
 
 ```text
-repository-name/
+Web-Services-Coursework2/
 |-- src/
 |   |-- crawler.py      # HTTP crawling and HTML parsing
 |   |-- indexer.py      # Inverted index construction and persistence
